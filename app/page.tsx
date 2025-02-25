@@ -45,6 +45,8 @@ import { getSuggestions } from "./lib/search"
 import type { UserPreferences } from "./types"
 import { SearchResult } from "./components/search-result"
 
+const BACKEND_URL = process.env.NEXT_PUBLIC_BEURL || "http://localhost:4400"
+
 export default function NextGenSearch() {
   const search = useSearch()
   const { isListening, startListening } = useVoiceSearch()
@@ -53,8 +55,7 @@ export default function NextGenSearch() {
   const [savedSearches, setSavedSearches] = useState<string[]>([])
   const [preferences, setPreferences] = useState<UserPreferences>(storage.getUserPreferences())
   const [currentTab, setCurrentTab] = useState("all")
-
-  // Mapping from tab names to search types
+  const [isFocused, setIsFocused] = useState(false)
   const tabToType: any = {
     all: "all",
     documents: "document",
@@ -62,6 +63,32 @@ export default function NextGenSearch() {
     videos: "video",
     audio: "audio",
   }
+
+  // Fetch suggestions only when typing
+  const fetchSuggestions = async (query: string) => {
+    if (!query || query.length < 2 || !preferences.searchSuggestions || !isFocused) {
+      setSuggestions([]);
+      return;
+    }
+
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/suggestions?q=${encodeURIComponent(query)}`);
+      const data = await response.json();
+      setSuggestions(data.slice(0, 5));
+    } catch (error) {
+      console.error('Failed to fetch suggestions:', error);
+      setSuggestions([]);
+    }
+  };
+
+  // Update suggestions only when query changes
+  useEffect(() => {
+    if (preferences.searchSuggestions) {
+      fetchSuggestions(search.query);
+    } else {
+      setSuggestions([]);
+    }
+  }, [search.query, preferences.searchSuggestions]);
 
   // Update search type when tab changes
   useEffect(() => {
@@ -74,14 +101,12 @@ export default function NextGenSearch() {
     setSavedSearches(storage.getSavedSearches())
   }, [])
 
-  // Update suggestions when query changes
-  useEffect(() => {
-    if (preferences.searchSuggestions) {
-      setSuggestions(getSuggestions(search.query))
-    } else {
-      setSuggestions([])
-    }
-  }, [search.query, preferences.searchSuggestions])
+  // Handle suggestion click
+  const handleSuggestionClick = (suggestion: string) => {
+    search.setQuery(suggestion);
+    setSuggestions([]); // Clear suggestions immediately
+    search.performSearch(); // Trigger search
+  };
 
   // Handle preference changes
   const updatePreference = (key: keyof UserPreferences, value: any) => {
@@ -201,7 +226,7 @@ export default function NextGenSearch() {
           </div>
 
           {/* Search Bar with Voice and Shortcuts */}
-          <div className="w-full max-w-4xl">
+          <div className="w-full max-w-4xl z-30">
             <div className="relative group">
               <div className="absolute inset-0 bg-gradient-to-r from-blue-500 via-green-500 to-red-500 rounded-lg blur opacity-75 group-hover:opacity-100 transition duration-1000"></div>
               <div className="relative flex gap-2 p-1 bg-black/40 backdrop-blur-xl rounded-lg">
@@ -213,16 +238,25 @@ export default function NextGenSearch() {
                     placeholder="Search anything... (⌘ + /)"
                     value={search.query}
                     onChange={(e) => search.setQuery(e.target.value)}
+                    onFocus={() => setIsFocused(true)}
+                    onBlur={() => setIsFocused(false)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        search.performSearch();
+                        setSuggestions([]); // Clear suggestions on Enter
+                      }
+                    }}
                   />
                   {suggestions.length > 0 && (
-                    <div className="absolute top-full left-0 right-0 mt-2 bg-black/90 backdrop-blur-xl rounded-lg border border-white/10 overflow-hidden z-50">
+                    <div className="absolute top-full left-0 right-0 mt-2 bg-black/90 backdrop-blur-xl rounded-lg border border-white/10 overflow-hidden z-[1000] max-h-60 overflow-y-auto">
                       {suggestions.map((suggestion, i) => (
                         <button
                           key={i}
-                          className="w-full px-4 py-2 text-left text-white/90 hover:bg-white/10 transition"
-                          onClick={() => search.setQuery(suggestion)}
+                          className="w-full px-4 py-2 text-left text-white/90 hover:bg-white/10 transition-all duration-150 flex items-center gap-2"
+                          onClick={() => handleSuggestionClick(suggestion)}
                         >
-                          {suggestion}
+                          <Search className="h-4 w-4 opacity-50" />
+                          <span>{suggestion}</span>
                         </button>
                       ))}
                     </div>
@@ -240,11 +274,14 @@ export default function NextGenSearch() {
                   size="lg"
                   className="bg-white/10 hover:bg-white/20 text-white border-0"
                   disabled={search.isLoading}
-                  onClick={() => search.performSearch()} // Add explicit search trigger
+                  onClick={() => {
+                    search.performSearch();
+                    setSuggestions([]); // Clear suggestions on search button click
+                  }}
                 >
                   <Command className="h-5 w-5 mr-2" />
                   {search.isLoading ? "Searching..." : "Search"}
-                </Button>              
+                </Button>
               </div>
             </div>
           </div>
@@ -462,7 +499,7 @@ export default function NextGenSearch() {
             <div className="flex items-center justify-between mb-6">
               <div className="flex items-center gap-4">
                 <span className="text-white/70">{search.results.length.toLocaleString()} results</span>
-                <span className="text-white/70">({search.isLoading ? "Searching..." : "0.42 seconds"})</span>
+                <span className="text-white/70">({search.isLoading ? "Searching..." : `${Math.random()} seconds`})</span>
               </div>
               <div className="flex items-center gap-2">
                 <DropdownMenu>
