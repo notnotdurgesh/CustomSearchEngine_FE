@@ -17,7 +17,7 @@ const initialState: SearchState = {
   page: 1,
   nextPageToken: null,
 }
-
+const BACKENDURL = process.env.BEURL
 export function useSearch() {
   const [state, setState] = useState<SearchState>(initialState)
   const debounceTimer = useRef<NodeJS.Timeout | null>(null)
@@ -52,7 +52,7 @@ export function useSearch() {
         pageToken: state.nextPageToken || '',
       })
 
-      const response = await fetch(`http://localhost:4400/api/search?${params}`)
+      const response = await fetch(`${BACKENDURL}/api/search?${params}`)
       const data = await response.json()
 
       if (!response.ok) throw new Error(data.message || 'Search failed')
