@@ -41,9 +41,10 @@ import { toast } from "sonner"
 import { useSearch } from "./hooks/use-search"
 import { useVoiceSearch } from "./hooks/use-voice-search"
 import { storage } from "./lib/storage"
-import { getSuggestions } from "./lib/search"
 import type { UserPreferences } from "./types"
 import { SearchResult } from "./components/search-result"
+import AIThinkingWebSocket from "./components/WebSocketNotifications";
+import { debounce } from 'lodash';
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BEURL || "http://localhost:4400"
 
@@ -64,32 +65,34 @@ export default function NextGenSearch() {
     audio: "audio",
   }
 
-  // Fetch suggestions only when typing
-  const fetchSuggestions = async (query: string) => {
+  const debouncedFetchSuggestions = debounce((query: string) => {
     if (!query || query.length < 2 || !preferences.searchSuggestions || !isFocused) {
       setSuggestions([]);
       return;
     }
+  
+    fetch(`${BACKEND_URL}/api/suggestions?q=${encodeURIComponent(query)}`)
+      .then((res) => res.json())
+      .then((data) => setSuggestions(data.slice(0, 5)))
+      .catch((error) => {
+        console.error('Failed to fetch suggestions:', error);
+        setSuggestions([]);
+      });
+  }, 300); // adjust delay (300ms) as needed
+  
 
-    try {
-      const response = await fetch(`${BACKEND_URL}/api/suggestions?q=${encodeURIComponent(query)}`);
-      const data = await response.json();
-      setSuggestions(data.slice(0, 5));
-    } catch (error) {
-      console.error('Failed to fetch suggestions:', error);
-      setSuggestions([]);
-    }
-  };
-
-  // Update suggestions only when query changes
   useEffect(() => {
     if (preferences.searchSuggestions) {
-      fetchSuggestions(search.query);
+      debouncedFetchSuggestions(search.query);
     } else {
       setSuggestions([]);
     }
-  }, [search.query, preferences.searchSuggestions]);
-
+    // Cleanup debounced call on unmount or when query changes
+    return () => {
+      debouncedFetchSuggestions.cancel();
+    };
+  }, [search.query, preferences.searchSuggestions, isFocused]);
+  
   // Update search type when tab changes
   useEffect(() => {
     search.setSearchType(tabToType[currentTab])
@@ -221,7 +224,7 @@ export default function NextGenSearch() {
           <div className="flex items-center gap-3 text-white mb-3 z-10">
             <Sparkles className="h-8 w-8" />
             <h1 className="text-5xl font-bold tracking-tighter bg-gradient-to-r from-blue-400 via-green-400 to-red-400 bg-clip-text text-transparent">
-              Adugu-Amma Search
+              ASSE Search
             </h1>
           </div>
 
@@ -499,7 +502,7 @@ export default function NextGenSearch() {
             <div className="flex items-center justify-between mb-6">
               <div className="flex items-center gap-4">
                 <span className="text-white/70">{search.results.length.toLocaleString()} results</span>
-                <span className="text-white/70">({search.isLoading ? "Searching..." : `${Math.random()} seconds`})</span>
+                <span className="text-white/70">({search.isLoading ? "Searching..." : null})</span>
               </div>
               <div className="flex items-center gap-2">
                 <DropdownMenu>
@@ -598,6 +601,7 @@ export default function NextGenSearch() {
             </div>
           </div>
         </div>
+        <AIThinkingWebSocket />
       </div>
     </div>
   )

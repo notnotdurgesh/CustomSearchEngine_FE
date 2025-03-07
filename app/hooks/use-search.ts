@@ -22,7 +22,6 @@ const BACKEND_URL = process.env.NEXT_PUBLIC_BEURL || "http://localhost:4400"
 
 export function useSearch() {
   const [state, setState] = useState<SearchState>(initialState)
-  const debounceTimer = useRef<NodeJS.Timeout | null>(null)
   const lastSearchParams = useRef<string>("")
 
   // Create a unique key for search parameters to prevent duplicate requests
@@ -82,21 +81,21 @@ export function useSearch() {
   }, [state.query, state.searchType, state.filters, state.sortBy, state.page, state.nextPageToken, getSearchKey])
 
   // Debounced search effect
-  useEffect(() => {
-    if (debounceTimer.current) {
-      clearTimeout(debounceTimer.current)
-    }
+  // useEffect(() => {
+  //   if (debounceTimer.current) {
+  //     clearTimeout(debounceTimer.current)
+  //   }
 
-    debounceTimer.current = setTimeout(() => {
-      performSearch()
-    }, 500)
+  //   debounceTimer.current = setTimeout(() => {
+  //     performSearch()
+  //   }, 2000)
 
-    return () => {
-      if (debounceTimer.current) {
-        clearTimeout(debounceTimer.current)
-      }
-    }
-  }, [state.query, state.searchType, state.filters, state.sortBy, state.page, performSearch])
+  //   return () => {
+  //     if (debounceTimer.current) {
+  //       clearTimeout(debounceTimer.current)
+  //     }
+  //   }
+  // }, [])
 
   const setQuery = useCallback((query: string) => {
     setState((prev) => ({ ...prev, query, page: 1, nextPageToken: null }))
